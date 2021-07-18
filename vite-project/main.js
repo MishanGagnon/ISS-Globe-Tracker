@@ -1,7 +1,7 @@
 import './style.css'
 
 import * as three from 'three';
-import { Clock, Sphere, SphereGeometry, TorusBufferGeometry, WireframeGeometry } from 'three';
+import { CameraHelper, Clock, Sphere, SphereGeometry, TorusBufferGeometry, WireframeGeometry } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls' 
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
@@ -12,7 +12,7 @@ const mouse = new three.Vector2();
 
 const toolTipClock = new three.Clock();
 const iss = []
-
+let cameraRepositionDone = false;
 
 function onMouseMove(event){
   mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
@@ -56,7 +56,6 @@ const sphere = new three.Mesh(geometry, material);
 sphere.userData = {name : "earth"}
 console.log(sphere)
 scene.add(sphere)
-
 // Long and lat to sphere points
 
 
@@ -78,11 +77,11 @@ scene.add(marker)
 
 
 let issLoaded = false;
-
 let currentIssPosition = [];
+let camCurrentPositon = []
+let cameraFuturePositon = []
 
-
-function createISS(array, size){
+function createISS(array, cameraArray){
   const GFTloader = new GLTFLoader();
   GFTloader.load( './international_space_station_-_iss/scene.gltf', function ( gltf ) {
     console.log(gltf)
@@ -94,39 +93,66 @@ function createISS(array, size){
     issModel.position.setY(array[1])
     issModel.position.setZ(array[2])
     iss[0] = issModel;
+    iss[0].lookAt(0,0,0)
     scene.add( gltf.scene );
   }, undefined, function ( error ) {
 
     console.error( error );
 
   } );
+  scene.updateMatrixWorld(true);
+  let cameraPosition = new three.Vector3()
+  cameraPosition.setFromMatrixPosition(camera.matrixWorld)
+  camCurrentPositon = [cameraPosition.x, cameraPosition.y,cameraPosition.z]
+  cameraFuturePositon = cameraArray
+  camera.position.setX(cameraArray[0])
+  camera.position.setY(cameraArray[1])
+  camera.position.setZ(cameraArray[2])
   currentIssPosition = array;
   issLoaded = true;
   }
-  
-  function issSlowPositionUpdate(){
-    
-    if(currentIssPosition != issFuturePosition){
-      let delta = clock.getDelta()
-      if(delta == 0){
-        delta+= 0.1
+
+function slowCameraPositionUpdate(){
+  console.log(camCurrentPositon, cameraFuturePositon)
+  for(var i = 0; i < 3; i++){
+    if(camCurrentPositon[i] > cameraFuturePositon[i]){
+      camCurrentPositon[i]-= (camCurrentPositon[i] - cameraFuturePositon[i]) / 20;
+      if(camCurrentPositon[i] <= cameraFuturePositon[i]+ .025){
+        cameraRepositionDone = true
       }
-      for(var i = 0; i < 3; i++){
-        if(currentIssPosition[i] > issFuturePosition[i]){
-          currentIssPosition[i]-= (currentIssPosition[i] - issFuturePosition[i]) / (delta*5000);
-        }else{
-          currentIssPosition[i]+= (issFuturePosition[i]- currentIssPosition[i]) / (delta*5000);
-        }
-      }
-      for(let i = 0; i < 2; i++ ){
-        iss[i].position.setX(currentIssPosition[0])
-        iss[i].position.setY(currentIssPosition[1])
-        iss[i].position.setZ(currentIssPosition[2])
+    }else{
+      camCurrentPositon[i]+= (cameraFuturePositon[i]- camCurrentPositon[i]) / 20;
+      if(camCurrentPositon[i] + .025 >= cameraFuturePositon[i]){
+        cameraRepositionDone = true
       }
     }
-    iss[0].lookAt(0,0,0)
-    //iss[0].rotation.x+= 0.0005
-    //iss[0].rotation.z+= 0.0005
+  }
+  camera.position.setX(camCurrentPositon[0])
+  camera.position.setY(camCurrentPositon[1])
+  camera.position.setZ(camCurrentPositon[2])
+}
+
+  
+function issSlowPositionUpdate(){
+  
+  if(currentIssPosition != issFuturePosition){
+    let delta = clock.getDelta()
+    if(delta == 0){
+      delta+= 0.1
+    }
+    for(var i = 0; i < 3; i++){
+      if(currentIssPosition[i] > issFuturePosition[i]){
+        currentIssPosition[i]-= (currentIssPosition[i] - issFuturePosition[i]) / (delta*5000);
+      }else{
+        currentIssPosition[i]+= (issFuturePosition[i]- currentIssPosition[i]) / (delta*5000);
+      }
+    }
+    for(let i = 0; i < 2; i++ ){
+      iss[i].position.setX(currentIssPosition[0])
+      iss[i].position.setY(currentIssPosition[1])
+      iss[i].position.setZ(currentIssPosition[2])
+    }
+  }
 }
 
 let issFuturePosition = []
@@ -153,8 +179,9 @@ controls.enableDamping = true;
   let storedDate = new Date().getTime()/1000
 
 
-let raycastLimiter = 0;
+//Animation Loop
 
+let raycastLimiter = 0;
 let toolTipTimer = 0;
 let lastTime = 0
 let currentTime = new Date().getTime()/1000;
@@ -179,7 +206,7 @@ function animate() {
     if(issLoaded){
       issPositonUpdate(calcPosFromLatLonRad(issLat, issLon, 85));
     }else{
-      createISS(calcPosFromLatLonRad(issLat, issLon, 85));
+      createISS(calcPosFromLatLonRad(issLat, issLon, 85),calcPosFromLatLonRad(issLat, issLon, 120));
       createMarker(calcPosFromLatLonRad(issLat, issLon, 80),6 )
 
     }
@@ -188,6 +215,9 @@ function animate() {
   }
   if(issFuturePositonReady){
     issSlowPositionUpdate()
+  }
+  if(issLoaded && !cameraRepositionDone){
+    slowCameraPositionUpdate()
   }
   controls.update()
   
@@ -199,7 +229,7 @@ function animate() {
     //console.log(scene.children , "hello")
     for ( let i = 0; i < intersects.length; i ++ ) {
       if(intersects[i].object.userData.name == "iss"){
-        toolTipTimer = 2;
+        toolTipTimer = 1;
         document.getElementById("tooltip").style.display = "flex";
         document.getElementById("tooltipText").innerText = iss[1].userData.data;
         
