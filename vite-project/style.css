@@ -11,9 +11,9 @@ canvas {
 }
 
 #tooltip {
-  width: 80vw;
+  width: 50vw;
   height: 8vh;
-  background-color: grey;
+  background: rgba(126, 126, 126, 0.5);
   z-index: 2;
   display: none;
   align-items: center;
@@ -25,4 +25,10 @@ canvas {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+
+#tooltipText{
+  opacity: 100%;
+  font-family: Arial, Helvetica, sans-serif;
 }
